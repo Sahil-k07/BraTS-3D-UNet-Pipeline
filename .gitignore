@@ -1,0 +1,16 @@
+# Environments
+venv/
+env/
+__pycache__/
+
+# Datasets (Do NOT upload medical data to GitHub)
+data/
+*.nii.gz
+
+# Model Weights and Outputs
+outputs/
+*.pth
+
+# IDEs
+.vscode/
+.idea/
