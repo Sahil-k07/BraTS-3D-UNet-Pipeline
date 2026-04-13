@@ -12,30 +12,37 @@ def load_config(config_path="configs/config.yaml"):
         return yaml.safe_load(file)
 
 def get_dataloaders(config):
-    # 1. Locate the data files
-    data_dir = config["paths"]["data_dir"]
+    # 1. Locate the data files directly from your config's "data" section
+    data_dir = config["data"]["data_dir"]
+    train_ratio = config["data"]["train_ratio"]
     
-    # Locate all patient folders
+    # Locate all patient folders inside the data directory
     patient_folders = sorted(glob.glob(os.path.join(data_dir, "*")))
     
-    # Split into train and val (e.g., 80/20 split)
-    split_idx = int(len(patient_folders) * 0.8)
+    # Dynamically split into train and val using your config's ratio
+    split_idx = int(len(patient_folders) * train_ratio)
     train_folders = patient_folders[:split_idx]
     val_folders = patient_folders[split_idx:]
 
-    # Create dictionaries for MONAI
-    train_files = [{"image": [os.path.join(f, "t1n.nii.gz"), 
-                              os.path.join(f, "t1c.nii.gz"), 
-                              os.path.join(f, "t2w.nii.gz"), 
-                              os.path.join(f, "t2f.nii.gz")],
-                    "seg": os.path.join(f, "seg.nii.gz")} for f in train_folders]
-    
-    val_files = [{"image": [os.path.join(f, "t1n.nii.gz"), 
-                            os.path.join(f, "t1c.nii.gz"), 
-                            os.path.join(f, "t2w.nii.gz"), 
-                            os.path.join(f, "t2f.nii.gz")],
-                  "seg": os.path.join(f, "seg.nii.gz")} for f in val_folders]
+    # Helper function to auto-find files ignoring prefixes (like "BraTS-GLI-00005-100-t1n.nii.gz")
+    def find_file(folder, suffix):
+        match = glob.glob(os.path.join(folder, f"*{suffix}"))
+        if not match:
+            raise FileNotFoundError(f"Could not find a file ending in {suffix} inside {folder}")
+        return match[0]
 
+    # Create dictionaries for MONAI using the auto-finder
+    train_files = [{"image": [find_file(f, "t1n.nii.gz"), 
+                              find_file(f, "t1c.nii.gz"), 
+                              find_file(f, "t2w.nii.gz"), 
+                              find_file(f, "t2f.nii.gz")],
+                    "seg": find_file(f, "seg.nii.gz")} for f in train_folders]
+    
+    val_files = [{"image": [find_file(f, "t1n.nii.gz"), 
+                            find_file(f, "t1c.nii.gz"), 
+                            find_file(f, "t2w.nii.gz"), 
+                            find_file(f, "t2f.nii.gz")],
+                  "seg": find_file(f, "seg.nii.gz")} for f in val_folders]
     # 2. Define transforms
     train_transforms = Compose([
         LoadImaged(keys=["image", "seg"]),

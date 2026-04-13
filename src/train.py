@@ -1,8 +1,9 @@
 import os
 import torch
 import torch.optim as optim
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from tqdm import tqdm
+
 
 from src.dataset import load_config, get_dataloaders
 from src.model import get_model
@@ -25,13 +26,16 @@ def train():
     model = get_model(config).to(device)
     criterion = BraTSCombinedLoss()
     optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"], weight_decay=1e-5)
-    scaler = GradScaler() # Automatic Mixed Precision (AMP)
+    
+    # Modern PyTorch AMP initialization
+    scaler = GradScaler('cuda') 
 
     # 3. Setup Checkpoint Directory
     checkpoint_dir = config["paths"]["checkpoint_dir"]
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    num_epochs = config["training"]["epochs"]
+    # Grab the max_epochs directly from your config
+    num_epochs = config["training"]["max_epochs"]
 
     # 4. Main Training Loop
     for epoch in range(1, num_epochs + 1):
@@ -43,19 +47,17 @@ def train():
             images = batch['image'].to(device)
             masks = batch['seg'].to(device)
 
-            # Format the mask and apply the BraTS fix (Class 4 -> 3)
             if masks.dim() == 5:
                 masks = masks.squeeze(1)
             masks[masks == 4] = 3
             
-            # Zero gradients
             optimizer.zero_grad()
 
-            # AMP: Forward pass with mixed precision to save VRAM
-            with autocast():
+            # Modern PyTorch autocast syntax
+            with autocast('cuda'):
                 outputs = model(images)
                 loss = criterion(outputs, masks)
-
+                
             # AMP: Backward pass and optimization
             scaler.scale(loss).backward()
             scaler.step(optimizer)
