@@ -1,158 +1,87 @@
+import os
+import glob
 import yaml
 import torch
-from pathlib import Path
-from sklearn.model_selection import train_test_split
-
-from monai.data import DataLoader, CacheDataset
+from monai.data import CacheDataset, DataLoader
 from monai.transforms import (
-    Compose,
-    LoadImaged,
-    EnsureChannelFirstd,
-    ConcatItemsd,
-    NormalizeIntensityd,
-    RandSpatialCropd,
-    RandFlipd,
-    RandRotate90d,
-    RandScaleIntensityd,
-    RandShiftIntensityd,
-    ToTensord,
-    DeleteItemsd,
-    Spacingd,
-    Orientationd,
-    CropForegroundd,
+    Compose, LoadImaged, EnsureChannelFirstd, NormalizeIntensityd, RandSpatialCropd
 )
 
-
 def load_config(config_path="configs/config.yaml"):
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f)
-
-
-def get_patient_files(data_dir, modalities):
-    """
-    Scans data_dir for patient folders and builds a list of dicts,
-    each containing paths to all 4 modality files + segmentation mask.
-    """
-    data_dir = Path(data_dir)
-    patient_folders = sorted([
-        f for f in data_dir.iterdir()
-        if f.is_dir() and f.name.startswith("BraTS")
-    ])
-
-    data_list = []
-    for patient_folder in patient_folders:
-        patient_id = patient_folder.name
-        entry = {}
-
-        all_found = True
-        for mod in modalities:
-            mod_file = patient_folder / f"{patient_id}-{mod}.nii.gz"
-            if not mod_file.exists():
-                print(f"⚠️  Missing: {mod_file}")
-                all_found = False
-                break
-            entry[mod] = str(mod_file)
-
-        seg_file = patient_folder / f"{patient_id}-seg.nii.gz"
-        if not seg_file.exists():
-            print(f"⚠️  Missing segmentation: {seg_file}")
-            all_found = False
-
-        if all_found:
-            entry["seg"] = str(seg_file)
-            data_list.append(entry)
-
-    print(f"✅ Found {len(data_list)} complete patient cases")
-    return data_list
-
-
-def get_transforms(config, mode="train"):
-    modalities = config["modalities"]
-    patch_size = config["training"]["patch_size"]
-
-    all_keys = modalities + ["seg"]
-    image_keys = modalities
-
-    base_transforms = [
-        LoadImaged(keys=all_keys),
-        EnsureChannelFirstd(keys=all_keys),
-        Orientationd(keys=all_keys, axcodes="RAS"),
-        Spacingd(
-            keys=all_keys,
-            pixdim=(1.0, 1.0, 1.0),
-            mode=("bilinear",) * len(image_keys) + ("nearest",),
-        ),
-        NormalizeIntensityd(keys=image_keys, nonzero=True, channel_wise=True),
-        ConcatItemsd(keys=image_keys, name="image"),
-        DeleteItemsd(keys=image_keys),
-    ]
-
-    if mode == "train":
-        aug_transforms = [
-            CropForegroundd(keys=["image", "seg"], source_key="image"),
-            RandSpatialCropd(
-                keys=["image", "seg"],
-                roi_size=patch_size,
-                random_size=False,
-            ),
-            RandFlipd(keys=["image", "seg"], prob=0.5, spatial_axis=0),
-            RandFlipd(keys=["image", "seg"], prob=0.5, spatial_axis=1),
-            RandFlipd(keys=["image", "seg"], prob=0.5, spatial_axis=2),
-            RandRotate90d(keys=["image", "seg"], prob=0.5, max_k=3),
-            RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
-            RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
-            ToTensord(keys=["image", "seg"]),
-        ]
-    else:
-        aug_transforms = [
-            CropForegroundd(keys=["image", "seg"], source_key="image"),
-            ToTensord(keys=["image", "seg"]),
-        ]
-
-    return Compose(base_transforms + aug_transforms)
-
+    with open(config_path, "r") as file:
+        return yaml.safe_load(file)
 
 def get_dataloaders(config):
-    data_list = get_patient_files(
-        config["data"]["data_dir"],
-        config["modalities"]
+    # 1. Locate the data files
+    data_dir = config["paths"]["data_dir"]
+    
+    # Locate all patient folders
+    patient_folders = sorted(glob.glob(os.path.join(data_dir, "*")))
+    
+    # Split into train and val (e.g., 80/20 split)
+    split_idx = int(len(patient_folders) * 0.8)
+    train_folders = patient_folders[:split_idx]
+    val_folders = patient_folders[split_idx:]
+
+    # Create dictionaries for MONAI
+    train_files = [{"image": [os.path.join(f, "t1n.nii.gz"), 
+                              os.path.join(f, "t1c.nii.gz"), 
+                              os.path.join(f, "t2w.nii.gz"), 
+                              os.path.join(f, "t2f.nii.gz")],
+                    "seg": os.path.join(f, "seg.nii.gz")} for f in train_folders]
+    
+    val_files = [{"image": [os.path.join(f, "t1n.nii.gz"), 
+                            os.path.join(f, "t1c.nii.gz"), 
+                            os.path.join(f, "t2w.nii.gz"), 
+                            os.path.join(f, "t2f.nii.gz")],
+                  "seg": os.path.join(f, "seg.nii.gz")} for f in val_folders]
+
+    # 2. Define transforms
+    train_transforms = Compose([
+        LoadImaged(keys=["image", "seg"]),
+        EnsureChannelFirstd(keys=["image", "seg"]),
+        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+        RandSpatialCropd(keys=["image", "seg"], roi_size=[128, 128, 128], random_size=False)
+    ])
+
+    val_transforms = Compose([
+        LoadImaged(keys=["image", "seg"]),
+        EnsureChannelFirstd(keys=["image", "seg"]),
+        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True)
+    ])
+
+    print("⏳ Starting Safe Memory Caching... (Optimized for system RAM)")
+    
+    # 3. Use CacheDataset for safe memory acceleration
+    train_ds = CacheDataset(
+        data=train_files, 
+        transform=train_transforms, 
+        cache_rate=0.05,  # 5% cache keeps RAM stable
+        num_workers=4     # Optimal thread count for external storage throughput
+    )
+    
+    val_ds = CacheDataset(
+        data=val_files, 
+        transform=val_transforms, 
+        cache_rate=0.10,  # 10% cache for validation
+        num_workers=2
     )
 
-    train_files, val_files = train_test_split(
-        data_list,
-        test_size=config["data"]["val_ratio"],
-        random_state=42,
-    )
-    print(f"📊 Train: {len(train_files)} | Val: {len(val_files)}")
-
-    train_transforms = get_transforms(config, mode="train")
-    val_transforms   = get_transforms(config, mode="val")
-
-    # Use regular Dataset instead of CacheDataset (no RAM caching)
-    from monai.data import Dataset
-
-    train_ds = Dataset(
-        data=train_files,
-        transform=train_transforms,
-    )
-    val_ds = Dataset(
-        data=val_files,
-        transform=val_transforms,
-    )
-
+    # 4. Create the DataLoaders
     train_loader = DataLoader(
-        train_ds,
-        batch_size=config["training"]["batch_size"],
-        shuffle=True,
-        num_workers=0,   # 0 = no multiprocessing, avoids memory issues on Windows
-        pin_memory=False,
+        train_ds, 
+        batch_size=config["training"]["batch_size"], 
+        shuffle=True, 
+        num_workers=0,   # Set to 0 for Windows stability during the main loop
+        pin_memory=True  # Enables fast transfer to the GPU
     )
+    
     val_loader = DataLoader(
-        val_ds,
-        batch_size=1,
-        shuffle=False,
+        val_ds, 
+        batch_size=1, 
+        shuffle=False, 
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True
     )
 
     return train_loader, val_loader

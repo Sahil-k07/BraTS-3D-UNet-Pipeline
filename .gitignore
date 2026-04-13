@@ -14,3 +14,10 @@ outputs/
 # IDEs
 .vscode/
 .idea/
+
+# Custom Dataset Folders and Zips
+training_data*/
+validation_data*/
+BraTS*/
+*.zip
+*.csv
