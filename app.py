@@ -38,26 +38,26 @@ def load_ai_model():
 model, device = load_ai_model()
 
 # --- HELPER FUNCTION: READ UPLOADED NIFTI ---
-import gzip
-import io
 import nibabel as nib
+import tempfile
+import os
 
 def load_nifti_upload(uploaded_file):
-    # Read the raw bytes from the Streamlit uploader
-    file_bytes = uploaded_file.getvalue()
-    
-    # Check if the file is compressed (.gz)
-    if uploaded_file.name.endswith('.gz'):
-        # Decompress the bytes in memory
-        with gzip.GzipFile(fileobj=io.BytesIO(file_bytes)) as gz:
-            decompressed_bytes = gz.read()
-        # Create the image object from decompressed data
-        img = nib.Nifti1Image.from_bytes(decompressed_bytes)
-    else:
-        # If it's a regular .nii, load normally
-        img = nib.Nifti1Image.from_bytes(file_bytes)
-        
-    return img.get_fdata()
+    # Create a temporary file to save the uploaded bytes
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".nii.gz") as tmp:
+        tmp.write(uploaded_file.getvalue())
+        tmp_path = tmp.name
+
+    try:
+        # Load the MRI using the file path (let nibabel handle the .gz)
+        img = nib.load(tmp_path)
+        data = img.get_fdata()
+    finally:
+        # Always delete the temp file after loading to save RAM
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+            
+    return data
 
 # --- UI: FILE UPLOADS ---
 st.sidebar.header("📂 Patient MRI Upload")

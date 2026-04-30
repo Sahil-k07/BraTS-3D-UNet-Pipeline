@@ -1,8 +1,5 @@
-torch --index-url https://download.pytorch.org/whl/cpu
-monai
 streamlit
 nibabel
-scikit-learn
-seaborn
-pyyaml
-tqdm
+torch
+torchvision
+numpy
