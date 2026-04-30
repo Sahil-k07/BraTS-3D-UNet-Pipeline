@@ -147,4 +147,73 @@ def visualize():
 
 if __name__ == "__main__":
     visualize()
+
+import pandas as pd
+import os
+
+def plot_training_metrics(csv_path="outputs/logs/metrics.csv"):
+    """
+    Reads a CSV containing epoch training logs and plots advanced convergence metrics.
+    Expected CSV columns: ['epoch', 'train_loss', 'val_loss', 'val_metric']
+    """
+    print(f"📊 Loading training metrics from {csv_path}...")
+    
+    if not os.path.exists(csv_path):
+        print(f"❌ Error: Could not find {csv_path}.")
+        print("Please ensure your training loop saves a CSV with columns: epoch, train_loss, val_loss")
+        return
+
+    # Load data
+    df = pd.read_csv(csv_path)
+    epochs = df['epoch'].values
+    train_loss = df['train_loss'].values
+    val_loss = df['val_loss'].values
+    
+    # Calculate the Convergence Gap
+    convergence_gap = np.abs(val_loss - train_loss)
+    
+    # Find the epoch with the Minimum Validation Loss (Best Weights)
+    min_val_idx = np.argmin(val_loss)
+    min_val_epoch = epochs[min_val_idx]
+    min_val_loss = val_loss[min_val_idx]
+    min_gap_at_best = convergence_gap[min_val_idx]
+
+    # --- PLOTTING ---
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    fig.suptitle("BraTS 3D U-Net Training Dynamics", fontsize=18, fontweight='bold')
+
+    # Plot 1: Loss Curves & Convergence Gap
+    axes[0].plot(epochs, train_loss, label='Training Loss', color='dodgerblue', linewidth=2)
+    axes[0].plot(epochs, val_loss, label='Validation Loss', color='darkorange', linewidth=2)
+    
+    # Shade the Convergence Gap
+    axes[0].fill_between(epochs, train_loss, val_loss, color='gray', alpha=0.2, label='Convergence Gap')
+    
+    # Mark the Minimum Validation Loss (Early Stopping Point)
+    axes[0].scatter(min_val_epoch, min_val_loss, color='red', s=100, zorder=5, label=f'Min Val Loss (Epoch {min_val_epoch})')
+    axes[0].axvline(x=min_val_epoch, color='red', linestyle='--', alpha=0.5)
+
+    axes[0].set_title("Loss vs. Epochs", fontsize=14)
+    axes[0].set_xlabel("Epoch", fontsize=12)
+    axes[0].set_ylabel("Loss (e.g., DiceCELoss)", fontsize=12)
+    axes[0].legend(loc="upper right")
+    axes[0].grid(True, linestyle='--', alpha=0.6)
+
+    # Plot 2: Convergence Gap Magnitude over time
+    axes[1].plot(epochs, convergence_gap, label='Absolute Gap (|Val - Train|)', color='purple', linewidth=2)
+    axes[1].scatter(min_val_epoch, min_gap_at_best, color='red', s=100, zorder=5)
+    
+    axes[1].set_title("Convergence Gap Magnitude", fontsize=14)
+    axes[1].set_xlabel("Epoch", fontsize=12)
+    axes[1].set_ylabel("Gap Value", fontsize=12)
+    axes[1].legend(loc="upper right")
+    axes[1].grid(True, linestyle='--', alpha=0.6)
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+
+if __name__ == "__main__":
+    # You can choose which one to run here!
+    # visualize() 
+    plot_training_metrics()
 #python -m src.visualize

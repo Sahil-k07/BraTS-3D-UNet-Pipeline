@@ -139,10 +139,17 @@ if st.sidebar.button("🚀 Run AI Segmentation", type="primary"):
             with col2:
                 st.subheader("AI Tumor Map")
                 fig2, ax2 = plt.subplots()
+                
+                # 1. Plot the base MRI scan FIRST (This acts as the background layer)
                 ax2.imshow(t1c_slice, cmap='gray')
-                # Overlay the prediction with alpha transparency
+                
+                # 2. Mask out the '0' values (background) so they are completely invisible
                 masked_pred = np.ma.masked_where(pred_slice == 0, pred_slice)
-                ax2.imshow(masked_pred, cmap=class_cmap, alpha=0.6, interpolation='none', vmin=0, vmax=3)
+                
+                # 3. Plot the AI mask ON TOP. 
+                # alpha=0.4 means it will be 40% opaque and 60% transparent.
+                ax2.imshow(masked_pred, cmap=class_cmap, alpha=0.4, interpolation='none', vmin=0, vmax=3)
+                
                 ax2.axis('off')
                 st.pyplot(fig2)
             

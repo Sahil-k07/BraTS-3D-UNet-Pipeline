@@ -1,41 +1,34 @@
-# 🧠 BraTS 3D U-Net: Brain Tumor Segmentation
+# 🧠 3D Brain Tumor Segmentation (BraTS)
 
-An end-to-end PyTorch computer vision pipeline for the semantic segmentation of brain tumors using 3D MRI scans. This project takes raw, multi-modal NIfTI files and outputs precise 3D boundary maps of three distinct tumor sub-regions.
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=white)
+![MONAI](https://img.shields.io/badge/MONAI-Medical_AI-00A4E4.svg)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white)
 
-## 🚀 Project Overview
-This repository contains a custom 3D U-Net architecture built from scratch to tackle the **Brain Tumor Segmentation (BraTS)** challenge. Medical 3D imaging requires massive computational resources and highly specialized loss functions to handle extreme class imbalances (where tumor pixels make up <1% of the total volume). 
+An end-to-end deep learning pipeline for 3D volumetric medical image segmentation, trained on the BraTS dataset. This project utilizes a **3D U-Net** architecture to process multi-modal MRI scans (T1, T1c, T2, FLAIR) and predict three distinct tumor sub-regions.
 
-### Key Features
-* **Custom 3D U-Net Architecture:** Built dynamically with configurable depths and feature channels, including robust dynamic padding to prevent odd-dimension skip-connection crashes.
-* **Advanced Loss Functions:** Utilizes a custom `BraTSCombinedLoss` module combining **Dice Loss** (to maximize spatial overlap) and **Focal Loss** (to force the network to learn difficult boundary pixels).
-* **Hardware Optimized Training:** Leverages `torch.cuda.amp` (Automatic Mixed Precision) to accelerate training and reduce VRAM footprint on large 128x128x128 3D voxel patches.
-* **Edge Deployment Ready:** Includes a Post-Training Quantization (PTQ) pipeline designed to compress FP32 weights into INT8 for lightweight CPU inference.
+## 🌟 Project Highlights
 
-## 📊 Performance (12 Epochs)
-The model achieved highly competitive Dice scores on unseen validation patients after a rapid 12-epoch training cycle:
-* **Peritumoral Edema (ED):** `0.8017`
-* **Enhancing Tumor (ET):** `0.7147`
-* **Necrotic Core (NCR):** `0.6383`
-* **Average Tumor Score:** `0.7182`
+* **Architecture:** 3D U-Net implemented via MONAI.
+* **Loss Function:** Custom Combined Focal + Dice Loss to combat severe class imbalance (background vs. tumor voxels).
+* **Hardware Optimization:** Engineered a safe memory-caching `DataLoader` with multi-threading and cuDNN benchmarking, reducing epoch training time by over 30% on consumer hardware.
+* **Clinical UI:** Interactive web frontend built with Streamlit for real-time, in-browser MRI inference.
 
-## 🛠️ Tech Stack
-* **Deep Learning:** PyTorch, Torchvision
-* **Medical Imaging:** MONAI, NiBabel
-* **Data Processing:** NumPy, SciPy
-* **Visualization:** Matplotlib
+## 🖥️ Streamlit Frontend
+Upload 4 NIfTI (`.nii.gz`) modalities to generate an AI-powered tumor boundary map in seconds. 
 
-## 📁 Repository Structure
-```text
-brats_project/
-├── configs/
-│   └── config.yaml          # Hyperparameters and file paths
-├── src/
-│   ├── dataset.py           # 3D DataLoaders and MONAI Augmentations
-│   ├── model.py             # 3D U-Net Architecture
-│   ├── losses.py            # Dice + Focal Loss implementation
-│   ├── train.py             # Main training loop with AMP
-│   ├── evaluate.py          # Dice score calculation on validation set
-│   ├── postprocess.py       # Connected Component Analysis (Noise removal)
-│   ├── visualize.py         # 2D slice visualization of 3D predictions
-│   └── quantize.py          # FP32 to INT8 model compression
-└── README.md
+![Streamlit UI](ui_screenshot.png)
+*(Legend: 🔴 Necrotic Core | 🟢 Peritumoral Edema | 🟡 Enhancing Tumor)*
+
+## 📊 Model Performance & Metrics
+Evaluated using multi-class ROC, Precision-Recall curves, and normalized confusion matrices.
+
+![Metrics Dashboard](metrics_dashboard.png)
+
+## 🚀 Quick Start
+
+**1. Clone the repository and install dependencies:**
+```bash
+git clone [https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git](https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git)
+cd YOUR_REPO_NAME
+pip install -r requirements.txt

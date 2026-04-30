@@ -1,5 +1,5 @@
 data:
-  data_dir: "D:/Codes/CV project/training_data1_v2"
+  data_dir: "E:/Codes/CV project/training_data1_v2"
   train_ratio: 0.85
   val_ratio: 0.15
 
@@ -21,7 +21,7 @@ training:
   batch_size: 1
   num_workers: 0
   max_epochs: 100
-  val_interval: 2
+  val_interval: 1 
   learning_rate: 0.0001
   weight_decay: 0.00001
   mixed_precision: true
