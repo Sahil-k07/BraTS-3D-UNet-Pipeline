@@ -1,10 +1,12 @@
 import streamlit as st
+import os
 import torch
 import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import io
+import gc
 
 from src.dataset import load_config
 from src.model import get_model
@@ -22,36 +24,46 @@ def load_ai_model():
     device = torch.device("cpu") 
     model = get_model(config).to(device)
     
-    # Let's use your quantized model if you have it, otherwise fallback to FP32
     try:
-        weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_12_INT8.pth"
-        model.load_state_dict(torch.load(weight_path, map_location=device))
-        st.sidebar.success("Loaded Lightweight INT8 Model")
-    except:
-        weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_12.pth"
-        model.load_state_dict(torch.load(weight_path, map_location=device))
-        st.sidebar.success("Loaded FP32 Model")
-        
+        # 1. Try Loading INT8
+        weight_path = os.path.join(config['paths']['checkpoint_dir'], "unet_epoch_12_INT8.pth")
+        if os.path.exists(weight_path):
+            model.load_state_dict(torch.load(weight_path, map_location=device))
+            st.sidebar.success("Loaded Lightweight INT8 Model")
+        else:
+            raise FileNotFoundError
+
+    except Exception:
+        try:
+            # 2. Fallback to FP32
+            weight_path = os.path.join(config['paths']['checkpoint_dir'], "unet_epoch_12.pth")
+            if os.path.exists(weight_path):
+                # Use strict=False just in case there are slight architecture mismatches
+                model.load_state_dict(torch.load(weight_path, map_location=device), strict=False)
+                st.sidebar.success("Loaded FP32 Model")
+            else:
+                st.sidebar.error("Model weights not found. Check GitHub LFS.")
+                
+        except Exception as e:
+            st.sidebar.error(f"Critical Error loading models: {e}")
+            
     model.eval()
     return model, device
 
 model, device = load_ai_model()
 
 # --- HELPER FUNCTION: READ UPLOADED NIFTI ---
-import nibabel as nib
-import tempfile
-import os
-
 def load_nifti_upload(uploaded_file):
+    import tempfile
     # Create a temporary file to save the uploaded bytes
     with tempfile.NamedTemporaryFile(delete=False, suffix=".nii.gz") as tmp:
         tmp.write(uploaded_file.getvalue())
         tmp_path = tmp.name
 
     try:
-        # Load the MRI using the file path (let nibabel handle the .gz)
+        # Load the MRI and immediately cast to float32 to save 50% RAM!
         img = nib.load(tmp_path)
-        data = img.get_fdata()
+        data = img.get_fdata().astype(np.float32) 
     finally:
         # Always delete the temp file after loading to save RAM
         if os.path.exists(tmp_path):
@@ -72,6 +84,7 @@ if st.sidebar.button("🚀 Run AI Segmentation", type="primary"):
         st.warning("⚠️ Please upload all 4 modalities to run the AI.")
     else:
         with st.spinner("Processing 3D Volumes & Running AI... This may take a few seconds."):
+            
             # 1. Read files into NumPy arrays
             t1_vol = load_nifti_upload(t1_file)
             t1c_vol = load_nifti_upload(t1c_file)
@@ -79,17 +92,29 @@ if st.sidebar.button("🚀 Run AI Segmentation", type="primary"):
             flair_vol = load_nifti_upload(flair_file)
             
             # 2. Stack into a single tensor [Channels, Depth, Height, Width]
-            # Note: Assuming files are already 128x128x128. If they are larger, 
-            # you would add a cropping function here.
             stacked_volume = np.stack([t1_vol, t1c_vol, t2_vol, flair_vol], axis=0)
+            
+            # 🚨 RAM DIET: Delete unused individual volumes IMMEDIATELY 
+            # (We keep t1c_vol because we need it for the matplotlib visual later)
+            del t1_vol, t2_vol, flair_vol
+            gc.collect() # Force clear RAM
             
             # Add Batch dimension: [1, 4, D, H, W]
             input_tensor = torch.tensor(stacked_volume, dtype=torch.float32).unsqueeze(0).to(device)
+            
+            # 🚨 RAM DIET: Delete stacked_volume now that we have the PyTorch tensor
+            del stacked_volume
+            gc.collect()
 
             # 3. AI Prediction
-            with torch.no_grad():
+            with torch.no_grad(): # CRITICAL: Tells PyTorch not to store gradients (saves massive memory)
                 output = model(input_tensor)
-                pred_mask = torch.argmax(output, dim=1).squeeze(0).numpy() # [D, H, W]
+                # Squeeze out batch dimension and cast to uint8 (super lightweight)
+                pred_mask = torch.argmax(output, dim=1).squeeze(0).cpu().numpy().astype(np.uint8) 
+
+            # 🚨 RAM DIET: Clear tensor and output from memory
+            del input_tensor, output
+            gc.collect()
 
             # 4. Find the best slice to display (largest tumor area)
             best_slice_idx = np.argmax(np.sum(pred_mask > 0, axis=(1, 2)))
@@ -127,7 +152,5 @@ if st.sidebar.button("🚀 Run AI Segmentation", type="primary"):
             * 🟢 **Green:** Peritumoral Edema (Swelling)
             * 🟡 **Yellow:** Enhancing Tumor (Active Edge)
             """)
-else:
-    st.info("👈 Upload all 4 `.nii.gz` files in the sidebar and click 'Run AI Segmentation' to begin.")
 
-#streamlit run app.py
+            #streamlit run app.py
