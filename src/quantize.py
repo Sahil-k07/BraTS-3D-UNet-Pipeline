@@ -13,7 +13,7 @@ def quantize_model():
     print("🧠 Loading original FP32 model...")
     model_fp32 = get_model(config).to("cpu")
     
-    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_12.pth"
+    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_32.pth"
     model_fp32.load_state_dict(torch.load(weight_path, map_location="cpu"))
     model_fp32.eval()
 
@@ -31,7 +31,7 @@ def quantize_model():
     )
 
     # 3. Save the Quantized Model
-    quantized_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_12_INT8.pth"
+    quantized_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_32_INT8.pth"
     torch.save(model_int8.state_dict(), quantized_path)
     
     quantized_size = os.path.getsize(quantized_path) / (1024 * 1024)

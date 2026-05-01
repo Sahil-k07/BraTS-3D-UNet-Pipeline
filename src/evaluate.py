@@ -41,7 +41,7 @@ def evaluate():
     model = get_model(config).to(device)
     
     # NOTE: Update this path if your weights were saved somewhere else!
-    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_12.pth" 
+    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_32.pth"   
     print(f"Loading weights from: {weight_path}")
     model.load_state_dict(torch.load(weight_path, map_location=device))
     

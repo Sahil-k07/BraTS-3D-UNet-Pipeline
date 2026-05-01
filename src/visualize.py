@@ -17,7 +17,7 @@ def visualize():
     model = get_model(config).to(device)
     
     # Load your best weights
-    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_12.pth"
+    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_32.pth"
     model.load_state_dict(torch.load(weight_path, map_location=device))
     model.eval()
 

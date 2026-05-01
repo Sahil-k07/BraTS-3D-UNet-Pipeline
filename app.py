@@ -26,7 +26,7 @@ def load_ai_model():
     
     try:
         # 1. Try Loading INT8
-        weight_path = os.path.join(config['paths']['checkpoint_dir'], "unet_epoch_12_INT8.pth")
+        weight_path = os.path.join(config['paths']['checkpoint_dir'], "unet_epoch_32_INT8.pth")
         if os.path.exists(weight_path):
             model.load_state_dict(torch.load(weight_path, map_location=device))
             st.sidebar.success("Loaded Lightweight INT8 Model")
@@ -36,7 +36,7 @@ def load_ai_model():
     except Exception:
         try:
             # 2. Fallback to FP32
-            weight_path = os.path.join(config['paths']['checkpoint_dir'], "unet_epoch_12.pth")
+            weight_path = os.path.join(config['paths']['checkpoint_dir'], "unet_epoch_32.pth")
             if os.path.exists(weight_path):
                 # Use strict=False just in case there are slight architecture mismatches
                 model.load_state_dict(torch.load(weight_path, map_location=device), strict=False)

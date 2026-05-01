@@ -1,57 +1,75 @@
 import torch
+import gc
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+
 from src.dataset import load_config, get_dataloaders
 from src.model import get_model
 
 def generate_saliency_map():
+    # 1. Load the configuration correctly within the function
     config = load_config("configs/config.yaml")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"🔍 Initializing XAI Engine on {device}...")
+    
+    # 2. Clear GPU memory to make room (just in case)
+    torch.cuda.empty_cache()
+    gc.collect()
+    
+    # 3. Use CPU to avoid the 4GB VRAM OutOfMemoryError
+    device = torch.device("cpu")
+    print(f"🔍 Running XAI Engine on {device} (Memory Optimized Mode)...")
 
-    # 1. Load Data and Model
+    # 4. Load Data
+    print("Loading validation dataset...")
     _, val_loader = get_dataloaders(config)
+
+    # 5. Initialize Model
     model = get_model(config).to(device)
     
-    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_12.pth"
+    # Use your finalized 32nd epoch weights
+    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_32.pth"
+    print(f"Loading weights from: {weight_path}")
     model.load_state_dict(torch.load(weight_path, map_location=device))
+    
     model.eval() # Must be in eval mode for stable gradients
 
-    # 2. Get a single patient
+    # 6. Get a single patient
     batch = next(iter(val_loader))
     images = batch['image'].to(device)
     masks = batch['seg'].to(device)
 
-    # 3. CRITICAL XAI STEP: Tell PyTorch to track gradients on the INPUT image
+    # 7. CRITICAL XAI STEP: Tell PyTorch to track gradients on the INPUT image
     images.requires_grad_()
 
-    # 4. Forward Pass
+    # 8. Forward Pass
+    print("Generating predictions and calculating gradients...")
     outputs = model(images)
     
     # We want to know what the AI looked at to predict "Enhancing Tumor" (Class 3)
-    # We sum up all the logits for Class 3 across the entire 3D volume
     tumor_score = outputs[0, 3, :, :, :].sum()
 
-    # 5. Backward Pass (The Magic)
-    # This flows the 'tumor_score' backwards through the network to the input image
+    # 9. Backward Pass (The Magic)
     model.zero_grad()
     tumor_score.backward()
 
-    # 6. Extract the Saliency Map
-    # Get the gradients of the input image, take absolute value, and find the max across the 4 MRI channels
+    # 10. Extract the Saliency Map
     saliency_3d = images.grad[0].abs().max(dim=0)[0].cpu().numpy()
     
-    # 7. Prep data for visualization
-    image_np = images[0, 1].detach().cpu().numpy() # Let's look at T1c (channel 1)
+    # 11. Prep data for visualization
+    image_np = images[0, 1].detach().cpu().numpy() # Look at T1c (channel 1)
     mask_np = masks[0].cpu().numpy()
+    
     if mask_np.ndim == 4:
         mask_np = mask_np.squeeze(0)
-    mask_np[mask_np == 4] = 3
+    
+    # --- THE BRATS FIX ---
+    mask_np[mask_np == 4] = 3 
+    
     pred_np = torch.argmax(outputs, dim=1)[0].detach().cpu().numpy()
 
-    # Find the best slice
+    # Find the best slice (the one with the most predicted tumor)
     best_slice_idx = np.argmax(np.sum(pred_np > 0, axis=(1, 2)))
+    print(f"Visualizing Depth Slice: {best_slice_idx}")
     
     img_slice = image_np[best_slice_idx, :, :]
     mask_slice = mask_np[best_slice_idx, :, :]
@@ -62,8 +80,11 @@ def generate_saliency_map():
     saliency_slice = (saliency_slice - saliency_slice.min()) / (saliency_slice.max() - saliency_slice.min() + 1e-8)
 
     # --- PLOTTING ---
+    print("Plotting results...")
     fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-    fig.suptitle(f"Explainable AI (XAI): Tumor Detection Saliency Map", fontsize=18, fontweight='bold')
+    fig.suptitle(f"Explainable AI (XAI): Tumor Detection Saliency Map (Epoch 32)", fontsize=18, fontweight='bold')
+    
+    # Custom colormap: 0=Black(BG), 1=Red(NCR), 2=Green(ED), 3=Yellow(ET)
     class_cmap = ListedColormap(['black', 'red', 'green', 'yellow'])
 
     axes[0].imshow(img_slice, cmap='gray')
@@ -91,5 +112,3 @@ def generate_saliency_map():
 
 if __name__ == "__main__":
     generate_saliency_map()
-
-    #python -m src.explain

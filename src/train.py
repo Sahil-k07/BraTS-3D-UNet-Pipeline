@@ -9,6 +9,27 @@ from src.dataset import load_config, get_dataloaders
 from src.model import get_model
 from src.losses import BraTSCombinedLoss 
 
+class EarlyStopping:
+    def __init__(self, patience=5, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss > self.best_loss - self.min_delta:
+            self.counter += 1
+            print(f"EarlyStopping counter: {self.counter} out of {self.patience}")
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_loss = val_loss
+            self.counter = 0
+
+
 def train():
     config = load_config("configs/config.yaml")
     
@@ -39,6 +60,8 @@ def train():
     with open(csv_path, mode='w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['epoch', 'train_loss', 'val_loss', 'val_metric'])
+
+    early_stopper = EarlyStopping(patience=5)
 
     # 4. Main Training & Validation Loop
     for epoch in range(1, num_epochs + 1):
@@ -113,6 +136,11 @@ def train():
                     # If a specific NIfTI file is missing or corrupted, skip this patient
                     print(f"\n⚠️ Skipping validation patient due to error: {e}")
                     continue
+
+                early_stopper(avg_val_loss)
+                if early_stopper.early_stop:
+                    print("Early stopping triggered. Finishing training.")
+                break
 
         # Avoid division by zero if the entire validation set was skipped
         if len(val_loader) > 0:

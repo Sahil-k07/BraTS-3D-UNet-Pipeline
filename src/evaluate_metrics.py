@@ -19,7 +19,7 @@ def evaluate_metrics():
     model = get_model(config).to(device)
     
     # Load your most recent weights (update this filename if needed)
-    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_1.pth" 
+    weight_path = f"{config['paths']['checkpoint_dir']}/unet_epoch_32.pth" 
     model.load_state_dict(torch.load(weight_path, map_location=device))
     model.eval()
 
