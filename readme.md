@@ -7,7 +7,7 @@
 
 An end-to-end deep learning pipeline for 3D volumetric medical image segmentation, trained on the BraTS dataset. This project utilizes a **3D U-Net** architecture to process multi-modal MRI scans ($T1$, $T1c$, $T2$, $FLAIR$) and predict three distinct tumor sub-regions.
 
-Developed as an advanced deep learning implementationthis project bridges the gap between theoretical computer vision and clinical deployability.
+Developed as an advanced deep learning implementation this project bridges the gap between theoretical computer vision and clinical deployability.
 
 ## 🌟 Project Highlights
 
