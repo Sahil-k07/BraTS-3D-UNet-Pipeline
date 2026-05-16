@@ -45,11 +45,3 @@ Upload 4 NIfTI (`.nii.gz`) modalities to generate an AI-powered tumor boundary m
 
 ![Streamlit UI](ui_screenshot.png)
 *(Legend: 🔴 Necrotic Core | 🟢 Peritumoral Edema | 🟡 Enhancing Tumor)*
-
-## 🚀 Quick Start
-
-**1. Clone the repository and install dependencies:**
-```bash
-git clone [https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git](https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME.git)
-cd YOUR_REPO_NAME
-pip install -r requirements.txt
